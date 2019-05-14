@@ -133,7 +133,6 @@ def clusterPlot(clusters, x, y):
     - x: coordinate x in graphic.
     - y: coordinate y in graphic.
     '''
-    colorList = ['r', 'b', 'g', ]
     for cluster in clusters:
         plt.plot(cluster[:,x], cluster[:,y], 'o')
     plt.show()
