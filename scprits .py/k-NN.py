@@ -150,16 +150,12 @@ y_pred = model.predict(X_test)
 
 print('Accuracy: ', np.round(np.mean(y_pred==y_test) * 100, 2),'%')
 
-test = np.column_stack([X_test, y_pred])
-
-classes_set = set(test[:,-1])
-classes_set = list(classes_set)
+classes_set = list(set(y_pred))
 clusters = [[] for i in classes_set]
 
-for x in test:
-    for j in range(0, len(classes_set)):
-        if x[-1] == classes_set[j]:
-            clusters[j].append(x[:-1])
+# If i-data has class j, introduces it in cluster j
+for i in range(0, len(y_pred)):
+    clusters[classes_set.index(y_pred[i])].append(X_test[i])
             
 clusters = [np.array(c) for c in clusters]
             
