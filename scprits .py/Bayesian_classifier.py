@@ -1,31 +1,27 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import mode
 from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
 
+class BayesianClassifier:
 
-class kNN:
     '''
-    k-nearest neighbors classification algorithm class.
+    Bayesian Clasifier
+    
     ----------
     Attributes
     ----------
-    - k: number of nearest neighbors to be considered.
-        Default value is 1.
-    - norm: Function. Vector Space Norm. Default
-        value is euclidean norm (numpy.linalg.norm).
-    - data_X: Data Matrix training set.
-    - data_y: Vector of classes. data_X[i,:] class is
-        data_y[i].
+    
+    - classes_set: list of tags.
+    - meanCluster: list which contains the mean of each cluster.
+    - inverse: list which contains the inverse of the covariance matrix of
+        each cluster.
+    - compute: auxiliar variable. Contains Log||covariance matrix|| -
+        2*log(N_k/N) for each cluster.
     '''
     
-    def __init__(self, k = 1, norm = np.linalg.norm):
-        self.k = k
-        self.norm = norm
-        
     def fit(self, data_X, data_y):
         '''
-        Fit function, just save training set.
+        Fit function. 
         ----------
         Paramaters
         ----------
@@ -33,85 +29,73 @@ class kNN:
         - data_y: Vector of classes. data_X[i,:] class is
             data_y[i].
         '''
-        self.data_X = data_X
-        self.data_y = data_y
+        
+        # Prepare data. We need data in clusters
+        self.classes_set = list(set(data_y))
+        clusters = [[] for i in self.classes_set]
+        
+        # If i-data has class j, introduces it in cluster j
+        for i in range(0, len(data_y)):
+            clusters[self.classes_set.index(data_y[i])].append(data_X[i])
+        
+        k = len(clusters)
+        clusters = np.array([np.array(c) for c in clusters])
+        
+        N = len(data_X)
+        d = len(data_X[0]) #Dimensions
+        
+        self.meanCluster = []
+        covarianceCluster = []
+        sizeCluster = [len(clusters[i]) for i in range (0, k)]
+        
+        for i in range (0, k):
+
+            #Compute mean of cluster
+            self.meanCluster.append([np.average([clusters[i][:,j]]) for j in range(0, d)])
+
+            #Compute the stimated covariance matrix of cluster
+            aux = np.zeros((d,d))
+            for j in range (0, sizeCluster[i]):
+                nDisper = np.subtract(clusters[i][j], self.meanCluster[i])
+                product = np.outer(nDisper,nDisper)
+                aux = aux + product
+            aux = aux / sizeCluster[i]
+            covarianceCluster.append(aux)
+            
+        self.inverse = [np.linalg.inv(i) for i in covarianceCluster]
+        self.compute = [np.log(np.linalg.norm(covarianceCluster[i]) -2*np.log(sizeCluster[i]/N)) for i in range(0, k)]
+        
         
     def predict(self, test_X):
         '''
-        Predict function, executes kNN algorithm.
+        Predict function.
         ----------
         Paramaters
         ----------
         - test_X: Data Matrix. Function will predict the
             class for each data test_X[i,:].
-        
         ------
         Return
         ------
         - test_y: Vector of classes. test_X[i,:] class is
             test_y[i].
         '''
-        
-        len_test_X = test_X.shape[0]
-        distances = []
         test_y = []
         
-        for x in self.data_X:
-            ''' For each data in training set, it calculates the
-                distance between its and each test data. '''
-            distances.append(self.norm(test_X - x, axis = 1))
-        distances = np.array(distances)
-        
-        for i in range (0, len_test_X):
-            ''' For each test data, it calculates k nearest neighbors
-                index, and assings most frequently class. '''
-            idx = np.argsort(distances[:,i])
-            ''' Reorder tags according to the previous order of distances to
-                train_X'''
-            closestTags = np.array(self.data_y)[idx]
-            closestTags = closestTags[:self.k]
-            test_y_mode, _ = mode(closestTags)
-            test_y.append(test_y_mode[0])
-        
+        for x in test_X:
+            solutions = []
+            #Compute the goal function for the cluster. 
+            #We will compute the function in multiple steps
+
+            #First we find the distance between point x and cluster's mean
+            distances = [np.subtract(x, i) for i in self.meanCluster]
+            
+            solutions = [np.dot(np.dot(distances[i], self.inverse[i]), distances[i]) for i in range(0, len(distances))]
+           
+            solutions = [solutions[i] + self.compute[i] for i in range(0, len(solutions))]
+
+            test_y.append(self.classes_set[np.argmin(solutions)])
         return np.array(test_y)
-    
-    def predict_proba(self, test_X):
-        '''
-        Predict_proba function, execute kNN algorithm.
-        ----------
-        Paramaters
-        ----------
-        - test_X: Data Matrix. Function will predict the
-            class for each data test_X[i,:].
-        
-        ------
-        Return
-        ------
-        - test_y: list of lists of pairs (probabilty, class)
-        '''
-        
-        len_test_X = test_X.shape[0]
-        distances = []
-        test_y = []
-        
-        for x in self.data_X:
-            ''' For each data in training set, it calculates the
-                distance between its and each test data. '''
-            distances.append(self.norm(test_X - x, axis = 1))
-        distances = np.array(distances)
-        
-        for i in range (0, len_test_X):
-            ''' For each test data, it calculates k nearest neighbors
-                index, and assings probabilties based on frequency
-                of each class. '''
-            idx = np.argsort(distances[:,i])
-            closestTags = np.array(self.data_y)[idx]
-            closestTags = closestTags[0:self.k]
-            test_y_mode = [(closestTags.tolist().count(j) / self.k, j) for j in set(closestTags)]
-            test_y.append(test_y_mode)
-              
-        return test_y
-		
 		
 def clusterPlot(clusters, x, y):
     '''
@@ -128,8 +112,7 @@ def clusterPlot(clusters, x, y):
     for cluster in clusters:
         plt.plot(cluster[:,x], cluster[:,y], 'o')
     plt.show()
-
-
+    
 def create_2d_data(K, sigma_class=10, sigma=0.5, min_num=10, max_num=20):
     '''Creates some random 2D data for testing.
     Return points X belonging to K classes given
@@ -173,7 +156,7 @@ def create_2d_data(K, sigma_class=10, sigma=0.5, min_num=10, max_num=20):
         count += N_class_list[k]
 
     return X, tags
-    
+	
 if __name__ == '__main__':
         
     K = 5
@@ -181,7 +164,7 @@ if __name__ == '__main__':
     X = X.transpose()
     train_X, test_X, train_y, test_y = train_test_split(X, y, test_size=0.5)
     
-    model = kNN(3)
+    model = BayesianClassifier()
     model.fit(train_X, train_y)
     
     pred_y = model.predict(test_X)
