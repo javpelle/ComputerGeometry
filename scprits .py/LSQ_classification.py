@@ -124,7 +124,7 @@ if __name__ == '__main__':
     ptos = np.vstack((XX.flatten(), YY.flatten()))
     z = cls.classifier(ptos)
     ZZ = z.reshape(grid_dim, grid_dim)
-    print(ZZ)
+
     plt.plot(X[0, :], X[1, :], 'x')
     plt.contour(XX, YY, ZZ)    
     plt.show()

@@ -1,31 +1,19 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import mode
 from sklearn.model_selection import train_test_split
 
-
-class kNN:
+class LSQ:
     '''
-    k-nearest neighbors classification algorithm class.
+    Least Square classification algorithm class.
     ----------
     Attributes
     ----------
-    - k: number of nearest neighbors to be considered.
-        Default value is 1.
-    - norm: Function. Vector Space Norm. Default
-        value is euclidean norm (numpy.linalg.norm).
-    - data_X: Data Matrix training set.
-    - data_y: Vector of classes. data_X[i,:] class is
-        data_y[i].
+    - W: Linear Matrix associated to affine application.
     '''
     
-    def __init__(self, k = 1, norm = np.linalg.norm):
-        self.k = k
-        self.norm = norm
-        
     def fit(self, data_X, data_y):
         '''
-        Fit function, just save training set.
+        Fit function. Computes W.
         ----------
         Paramaters
         ----------
@@ -33,12 +21,23 @@ class kNN:
         - data_y: Vector of classes. data_X[i,:] class is
             data_y[i].
         '''
-        self.data_X = data_X
-        self.data_y = data_y
-        
+        data_X = np.array(data_X)
+        print(data_y)
+        K = len(set(data_y)) # Number of tags
+        N = data_X.shape[0] # Number of data
+        X = np.vstack((np.ones(N), data_X.T))
+        A = X.dot(X.T)
+        T = np.zeros((K, N))
+        for i in range(0 ,N):
+            T[data_y[i], i] = 1
+        B = X.dot(T.T)
+        # AW = B
+        self.W = np.linalg.solve(A, B)
+    
+
     def predict(self, test_X):
         '''
-        Predict function, executes kNN algorithm.
+        Predict function, executes LSQ algorithm.
         ----------
         Paramaters
         ----------
@@ -51,68 +50,13 @@ class kNN:
         - test_y: Vector of classes. test_X[i,:] class is
             test_y[i].
         '''
-        
-        len_test_X = test_X.shape[0]
-        distances = []
-        test_y = []
-        
-        for x in self.data_X:
-            ''' For each data in training set, it calculates the
-                distance between its and each test data. '''
-            distances.append(self.norm(test_X - x, axis = 1))
-        distances = np.array(distances)
-        
-        for i in range (0, len_test_X):
-            ''' For each test data, it calculates k nearest neighbors
-                index, and assings most frequently class. '''
-            idx = np.argsort(distances[:,i])
-            ''' Reorder tags according to the previous order of distances to
-                train_X'''
-            closestTags = np.array(self.data_y)[idx]
-            closestTags = closestTags[:self.k]
-            test_y_mode, _ = mode(closestTags)
-            test_y.append(test_y_mode[0])
-        
-        return np.array(test_y)
-    
-    def predict_proba(self, test_X):
-        '''
-        Predict_proba function, execute kNN algorithm.
-        ----------
-        Paramaters
-        ----------
-        - test_X: Data Matrix. Function will predict the
-            class for each data test_X[i,:].
-        
-        ------
-        Return
-        ------
-        - test_y: list of lists of pairs (probabilty, class)
-        '''
-        
-        len_test_X = test_X.shape[0]
-        distances = []
-        test_y = []
-        
-        for x in self.data_X:
-            ''' For each data in training set, it calculates the
-                distance between its and each test data. '''
-            distances.append(self.norm(test_X - x, axis = 1))
-        distances = np.array(distances)
-        
-        for i in range (0, len_test_X):
-            ''' For each test data, it calculates k nearest neighbors
-                index, and assings probabilties based on frequency
-                of each class. '''
-            idx = np.argsort(distances[:,i])
-            closestTags = np.array(self.data_y)[idx]
-            closestTags = closestTags[0:self.k]
-            test_y_mode = [(closestTags.tolist().count(j) / self.k, j) for j in set(closestTags)]
-            test_y.append(test_y_mode)
-              
-        return test_y
-		
-		
+        test_X = np.array(test_X)
+        N = test_X.shape[0]
+        X = np.vstack((np.ones(N), test_X.T))
+        T = (self.W.T).dot(X)
+        return np.argmax(T, axis=0)
+
+
 def clusterPlot(clusters, x, y):
     '''
     Draw all members of a cluster list and centroids
@@ -176,11 +120,11 @@ def create_2d_data(K, sigma_class=10, sigma=0.5, min_num=10, max_num=20):
     
 if __name__ == '__main__':
         
-    K = 5
-    X, y  = create_2d_data(K, sigma = 5)
+    K = 3
+    X, y  = create_2d_data(K, sigma = 6)
     train_X, test_X, train_y, test_y = train_test_split(X, y, test_size=0.5)
     
-    model = kNN(3)
+    model = LSQ()
     model.fit(train_X, train_y)
     
     pred_y = model.predict(test_X)

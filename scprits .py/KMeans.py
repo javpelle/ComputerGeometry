@@ -149,14 +149,13 @@ def create_2d_data(K, sigma_class=10, sigma=0.5, min_num=10, max_num=20):
             mu_list[k][:, np.newaxis] + np.random.randn(2, N_class_list[k])*sigma
         count += N_class_list[k]
 
-    return X, tags
+    return X.T, tags
     
 if __name__ == '__main__':
         
     K = 10
     X, _ = create_2d_data(K, sigma = 5)
-    X = X.transpose()
     
     model = KMeans(K)
-    clusters, centroids, y_pred = model.cluster(X, tolerance = 0, silent = False)
+    clusters, centroids, _ = model.cluster(X, tolerance = 0, silent = False)
     clusterPlot(clusters,0,1, centroids)

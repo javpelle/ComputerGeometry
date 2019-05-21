@@ -1,24 +1,18 @@
 import numpy as np
-from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 
-class BayesianClassifier:
-
+class Fisher:
     '''
-    Bayesian Clasifier
-    
+    Least Square classification algorithm class.
     ----------
     Attributes
     ----------
-    
+    - w: Linear vector associated to linear application.
+    - c: Real. if w(x) < c then x belongs to C1, otherwise, to C2
     - classes_set: list of tags.
-    - meanCluster: list which contains the mean of each cluster.
-    - inverse: list which contains the inverse of the covariance matrix of
-        each cluster.
-    - compute: auxiliar variable. Contains Log||covariance matrix|| -
-        2*log(N_k/N) for each cluster.
     '''
-    
+        
     def fit(self, data_X, data_y):
         '''
         Fit function. 
@@ -32,41 +26,82 @@ class BayesianClassifier:
         
         # Prepare data. We need data in clusters
         self.classes_set = list(set(data_y))
+        if len(self.classes_set) != 2:
+            print ('Must be 2 classes')
+            return
+        d = len(data_X[0])
         clusters = [[] for i in self.classes_set]
+        
         
         # If i-data has class j, introduces it in cluster j
         for i in range(0, len(data_y)):
             clusters[self.classes_set.index(data_y[i])].append(data_X[i])
         
-        k = len(clusters)
         clusters = np.array([np.array(c) for c in clusters])
         
+        k1 = len(clusters[0])
+        k2 = len(clusters[1])
         N = len(data_X)
-        d = len(data_X[0]) #Dimensions
         
-        self.meanCluster = []
-        covarianceCluster = []
-        sizeCluster = [len(clusters[i]) for i in range (0, k)]
+        mean1 = np.sum(clusters[0], axis = 0) / k1
+        mean2 = np.sum(clusters[1], axis = 0) / k2
         
-        for i in range (0, k):
-
-            #Compute mean of cluster
-            self.meanCluster.append([np.average([clusters[i][:,j]]) for j in range(0, d)])
-
-            #Compute the stimated covariance matrix of cluster
-            aux = np.zeros((d,d))
-            for j in range (0, sizeCluster[i]):
-                nDisper = np.subtract(clusters[i][j], self.meanCluster[i])
-                product = np.outer(nDisper,nDisper)
-                aux = aux + product
-            aux = aux / sizeCluster[i]
-            covarianceCluster.append(aux)
+        SW1 = np.zeros((d,d))
+        SW2 = np.zeros((d,d))
+        
+        for x in clusters[0]:
+            aux = np.subtract(x, mean1)
+            SW1 = SW1 + np.outer(aux, aux)
             
-        self.inverse = [np.linalg.inv(i) for i in covarianceCluster]
-        self.compute = [np.log(np.linalg.norm(covarianceCluster[i]) -2*np.log(sizeCluster[i]/N)) for i in range(0, k)]
+        for x in clusters[1]:
+            aux = np.subtract(x, mean2)
+            SW2 = SW2 + np.outer(aux, aux)
+            
+        SW = SW1 + SW2
+        self.w = np.linalg.inv(SW).dot(np.subtract(mean2, mean1))
         
+        m1 = self.w.dot(mean1)
+        m2 = self.w.dot(mean1)
         
-    def predict(self, test_X):
+        p1 = k1 / N
+        p2 = k2 / N
+        
+        sigma1 = 0
+        sigma2 = 0
+        
+        for x in clusters[0]:
+            sigma1 = sigma1 + (self.w.dot(x) - m1) ** 2
+        sigma1 = sigma1 / k1
+            
+        for x in clusters[1]:
+            sigma2 = sigma2 + (self.w.dot(x) - m2) ** 2
+        sigma2 = sigma2 / k2
+        
+        # Computes F(c) = 0 roots. They are our relative extremas
+        a2 = (1/(2*sigma1) - 1/(2*sigma2))
+        a1 = (m1/sigma1 - m2/sigma2)
+        a0 = np.log(p1 / np.sqrt(sigma1)) - np.log(p2 / np.sqrt(sigma2)) + (m2**2)/(2*sigma2) - (m1**2)/(2*sigma1)
+        c_list = np.roots([a2, a1, a0])
+        
+        if self.F_derivate(c_list[0], m1, m2, sigma1, sigma2) > 0:
+            # If F'(c1) > 0 then c1 is our minimun
+            self.c = c_list[0]
+        else:
+            # If F'(c2) > 0 then c2 is our minimun
+            self.c = c_list[1]
+    
+    def F_derivate(self, c, m1, m2, sigma1, sigma2):
+        '''
+        Auxiliar F'(c) function.
+        
+        ------
+        Return
+        ------
+        - F'(c)
+        '''
+        return (m1 - c)/sigma1 + (c - m2)/sigma2
+        
+    def predict(self, test_X): 
         '''
         Predict function.
         ----------
@@ -80,23 +115,11 @@ class BayesianClassifier:
         - test_y: Vector of classes. test_X[i,:] class is
             test_y[i].
         '''
-        test_y = []
+        aux = self.w.dot(test_X.T)
         
-        for x in test_X:
-            solutions = []
-            #Compute the goal function for the cluster. 
-            #We will compute the function in multiple steps
-
-            #First we find the distance between point x and cluster's mean
-            distances = [np.subtract(x, i) for i in self.meanCluster]
-            
-            solutions = [np.dot(np.dot(distances[i], self.inverse[i]), distances[i]) for i in range(0, len(distances))]
-           
-            solutions = [solutions[i] + self.compute[i] for i in range(0, len(solutions))]
-
-            test_y.append(self.classes_set[np.argmin(solutions)])
+        test_y = [self.classes_set[0] if i < self.c else self.classes_set[1] for i in aux]
         return np.array(test_y)
-		
+    
 def clusterPlot(clusters, x, y):
     '''
     Draw all members of a cluster list and centroids
@@ -112,7 +135,8 @@ def clusterPlot(clusters, x, y):
     for cluster in clusters:
         plt.plot(cluster[:,x], cluster[:,y], 'o')
     plt.show()
-    
+
+
 def create_2d_data(K, sigma_class=10, sigma=0.5, min_num=10, max_num=20):
     '''Creates some random 2D data for testing.
     Return points X belonging to K classes given
@@ -156,14 +180,14 @@ def create_2d_data(K, sigma_class=10, sigma=0.5, min_num=10, max_num=20):
         count += N_class_list[k]
 
     return X.T, tags
-	
+    
 if __name__ == '__main__':
         
-    K = 5
-    X, y  = create_2d_data(K, sigma = 5)
+    K = 2
+    X, y  = create_2d_data(K, sigma = 6)
     train_X, test_X, train_y, test_y = train_test_split(X, y, test_size=0.5)
     
-    model = BayesianClassifier()
+    model = Fisher()
     model.fit(train_X, train_y)
     
     pred_y = model.predict(test_X)
@@ -188,3 +212,16 @@ if __name__ == '__main__':
     clusterPlot(clusters,0,1)
     
     print('Accuracy: ', np.round(np.mean(pred_y == test_y)*100, 2),'%')
+    
+    a = 50
+    grid_dim = 1000
+    x = np.linspace(-a, a, grid_dim)    
+    y = np.linspace(-a, a, grid_dim)    
+    XX, YY = np.meshgrid(x, y)
+    
+    ptos = np.vstack((XX.flatten(), YY.flatten()))
+    z = model.predict(ptos.T)
+    ZZ = z.reshape(grid_dim, grid_dim)
+    plt.plot(train_X[:, 0], train_X[:, 1], 'x')
+    plt.contour(XX, YY, ZZ)    
+    plt.show()
